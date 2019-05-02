@@ -1,0 +1,104 @@
+#!/bin/bash
+
+# Variables
+## Dossier à sauvegarder
+BACKUPFOLDER=$1
+
+## Dossier de destination pour le fichier de sauvegarde 'save.tar'
+DESTFOLDER=$2
+
+## Options du script
+OPTION=$3
+
+## Time, Date and name Variable
+FRIDAY="5"
+TODAY=`date +%u`
+DATE=`date +%Y-%m-%d`
+DATETIME=`date '+%Y-%m-%d_%H:%M:%S'`
+DESTFILENAME="$DESTFOLDER/archive.vendredi-$DATE.tar"
+DESTFILENAMEINCREM="$DESTFOLDER/archive.$DATETIME.tar"
+CRONSCRIPT=~/autosave.sh
+CRONLINE="00 03 * * 5 $CRONSCRIPT"
+
+
+
+# Fonction aide
+usages() {
+    echo -e "Utilisation du scripts de sauvegarde :\n
+    ./save_script FOLDER_TO_BACKUP DESTINATION_FOLER/ OPTION\n
+    AVANT TOUT VERIFIEZ QUE VOUS AVEZ LES BONS DROITS SUR LES DOSSIER SINON UTILISEZ sudo !\n
+    Les options disponibles sont :\n
+        ponctual : Sauvegarde immédiate\n
+        enable : Activer le service de sauvegarde tous les vendredi\n
+        disable : Désinstaller le service
+        check : Vérifier la présence du service
+    \n"
+    echo -e "Utilisez ./save_script --help ou ./save_script -h pour afficher ce message."
+    
+}
+
+# Fonction sauvegarde
+
+save() {
+    # echo 'test save ok'
+    if [[ -e $DESTFOLDER/increment.list ]]; then
+        tar --create --file="$DESTFILENAMEINCREM" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+    else
+        tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+    fi;
+    clear
+    echo "Sauvegarde effectuée"
+}
+
+enable_auto_save() {
+    # echo 'test enable_auto_save ok'
+    test -f $CRONSCRIPT || touch $CRONSCRIPT
+    echo "
+#!/bin/bash
+rm -f $DESTFOLDER\*
+if [[ -e $DESTFOLDER/increment.list ]]; then
+    tar --create --file="$DESTFILENAMEINCREM" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+else
+    tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+fi;
+    " >> $CRONSCRIPT
+    chmod +x $CRONSCRIPT
+    (crontab -u $USER -l; echo "$CRONLINE";) | crontab -u $USER -
+    clear
+    echo "Service installé"
+    
+}
+
+disable_auto_save() {
+    # echo 'test disable_auto_save ok'
+    crontab -u $USER -l | grep -v "$CRONSCRIPT" | crontab -u $USER -
+    rm -f $CRONSCRIPT
+    clear
+    echo "Service désinstallé"
+}
+
+check_cron() {
+    crontab -u $USER -l
+}
+
+
+[ -d $DESTFOLDER ] || mkdir -p $DESTFOLDER
+if [[ ($1 = "--help") || ($1 = "-h") ]]; then
+    usages
+    exit 1
+    elif [[ ($OPTION = "ponctual") ]] ; then
+    save
+    exit 1
+    elif [[ ($OPTION = "enable") ]] ; then
+    enable_auto_save
+    exit 1
+    elif [[ ($OPTION = "disable") ]] ; then
+    disable_auto_save
+    exit 1
+    elif [[ ($OPTION = "check") ]] ; then
+    check_cron
+    exit 1
+else
+    echo -e "Commande Invalide\n"
+    usages
+fi;

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+[ -d youtube-dl-folder ] || mkdir youtube-dl-folder
+
+read -p 'URL de la video : ' url
+youtube-dl -x --audio-format mp3 "$url"
+ls -l youtube-dl-folder/
