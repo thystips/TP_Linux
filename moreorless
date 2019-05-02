@@ -1,0 +1,42 @@
+#!/bin/bash
+# Variables nécessaires pour l'initialisation
+randnumber=$(($RANDOM % 1000 + 1))
+varusernb=0
+count=0
+# boucle de jeu
+
+while [[ "$randnumber" -ne "$varusernb" ]]
+do echo 'Entrez un nombre'
+    # Nombre entré par l'utilisateur
+    read varusernb
+    
+    # Comparaison entre le nombre entré par l'utilisateur et la variable "randnumber"
+    if [[ "$varusernb" -eq "$varusernb" 2>/dev/null ]]
+    then
+        # Le nombre entré est trop petit
+        if [[ "$varusernb" -lt "$randnumber" ]]
+        then
+            echo -e 'Le nombre à trouver est plus grand\n'
+            
+            # Incrémentation de la variable "count"
+            count=$(($count + 1))
+            
+            # Le nombre entré est trop grand
+        elif [[ "$varusernb" -gt "$randnumber" ]]
+        then
+            echo -e 'Le nombre à trouver est plus petit\n'
+            
+            # Incrémentation de la variable "count"
+            count=$(($count+  1))
+        else
+            # Résultats de la partie
+            echo 'Vous avez terminé la partie en $count essais !'
+        fi
+    else
+        echo -e 'Vous devez entrer un nombre et non un caractère spécial\n'
+        varusernb=0
+        
+        # Incrémentation de la variable "count"
+        count=$(($count + 1))
+    fi
+done
