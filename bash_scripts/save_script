@@ -21,7 +21,6 @@ CRONSCRIPT=~/autosave.sh
 CRONLINE="00 03 * * 5 $CRONSCRIPT"
 
 
-
 # Fonction aide
 usages() {
     echo -e "Utilisation du scripts de sauvegarde :\n
@@ -30,8 +29,8 @@ usages() {
     Les options disponibles sont :\n
         ponctual : Sauvegarde immédiate\n
         enable : Activer le service de sauvegarde tous les vendredi\n
-        disable : Désinstaller le service
-        check : Vérifier la présence du service
+        disable : Désinstaller le service\n
+        check : Vérifier la présence les tâche à démarrage automatique
     \n"
     echo -e "Utilisez ./save_script --help ou ./save_script -h pour afficher ce message."
     
@@ -39,6 +38,7 @@ usages() {
 
 # Fonction sauvegarde
 
+## Sauvegarde Incrémentable
 save() {
     # echo 'test save ok'
     if [[ -e $DESTFOLDER/increment.list ]]; then
@@ -50,12 +50,13 @@ save() {
     echo "Sauvegarde effectuée"
 }
 
+## Activation sauvegarde automatique
 enable_auto_save() {
     # echo 'test enable_auto_save ok'
     test -f $CRONSCRIPT || touch $CRONSCRIPT
     echo "
 #!/bin/bash
-rm -f $DESTFOLDER\*
+rm -f $DESTFOLDER/*
 if [[ -e $DESTFOLDER/increment.list ]]; then
     tar --create --file="$DESTFILENAMEINCREM" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
 else
@@ -65,7 +66,7 @@ fi;
     chmod +x $CRONSCRIPT
     (crontab -u $USER -l; echo "$CRONLINE";) | crontab -u $USER -
     clear
-    echo "Service installé"
+    echo "Sauvegarde automatique activée"
     
 }
 
@@ -74,7 +75,7 @@ disable_auto_save() {
     crontab -u $USER -l | grep -v "$CRONSCRIPT" | crontab -u $USER -
     rm -f $CRONSCRIPT
     clear
-    echo "Service désinstallé"
+    echo "Sauvegarde automatique désactivée"
 }
 
 check_cron() {
