@@ -30,8 +30,9 @@ usages() {
         ponctual : Sauvegarde immédiate\n
         enable : Activer le service de sauvegarde tous les vendredi\n
         disable : Désinstaller le service\n
-        check : Vérifier la présence les tâche à démarrage automatique
-    \n"
+        check : Vérifier la présence les tâche à démarrage automatique\n
+        list : List les fichiers du dossier de destination de la sauvegarde\n
+    "
     echo -e "Utilisez ./save_script --help ou ./save_script -h pour afficher ce message."
     
 }
@@ -70,6 +71,7 @@ fi;
     
 }
 
+## Désactivation sauvegarde automatique
 disable_auto_save() {
     # echo 'test disable_auto_save ok'
     crontab -u $USER -l | grep -v "$CRONSCRIPT" | crontab -u $USER -
@@ -78,16 +80,21 @@ disable_auto_save() {
     echo "Sauvegarde automatique désactivée"
 }
 
+## Vérification des taches automatiques
 check_cron() {
     crontab -u $USER -l
 }
 
+## List des fichiers du dossier de destination
+show_life() {
+    ls -la $DESTFOLDER
+}
 
 [ -d $DESTFOLDER ] || mkdir -p $DESTFOLDER
 if [[ ($1 = "--help") || ($1 = "-h") ]]; then
     usages
     exit 1
-    elif [[ ($OPTION = "ponctual") ]] ; then
+    elif [[ ($OPTION = "save") ]] ; then
     save
     exit 1
     elif [[ ($OPTION = "enable") ]] ; then
@@ -99,6 +106,10 @@ if [[ ($1 = "--help") || ($1 = "-h") ]]; then
     elif [[ ($OPTION = "check") ]] ; then
     check_cron
     exit 1
+    elif [[ ($OPTION = "show") ]] ; then
+    show_life
+    exit 1
+    
 else
     echo -e "Commande Invalide\n"
     usages
