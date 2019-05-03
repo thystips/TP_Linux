@@ -15,10 +15,10 @@ FRIDAY="5"
 TODAY=`date +%u`
 DATE=`date +%Y-%m-%d`
 DATETIME=`date '+%Y-%m-%d_%H:%M:%S'`
-DESTFILENAME="$DESTFOLDER/archive.vendredi-$DATE.tar"
-DESTFILENAMEINCREM="$DESTFOLDER/archive.$DATETIME.tar"
+DESTFILENAME=""
 CRONSCRIPT=~/autosave.sh
 CRONLINE="00 03 * * 5 $CRONSCRIPT"
+
 
 
 # Fonction aide
@@ -43,11 +43,23 @@ usages() {
 save() {
     # echo 'test save ok'
     if [[ -e $DESTFOLDER/increment.list ]]; then
-        tar --create --file="$DESTFILENAMEINCREM" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+        MAX=`ls | cut -c-1 | sort -n | tail -1`
+        
     else
-        tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+        touch $DESTFOLDER/increment.list
+        MAX="0"
     fi;
-    clear
+    
+    if [ $TODAY -ge $FRIDAY ]; then
+        MAX=$(( $MAX + 1 ))
+        DESTFILENAME="$MAX-savefull.tar"
+        tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER" 2>/dev/null
+    else
+        DESTFILENAME="$MAX-$DATETIME-save.tar"
+        tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER" 2>/dev/null
+    fi;
+    
+    find $DESTFOLDER -mtime +30 -type f -delete
     echo "Sauvegarde effectuée"
 }
 
@@ -57,12 +69,29 @@ enable_auto_save() {
     test -f $CRONSCRIPT || touch $CRONSCRIPT
     echo "
 #!/bin/bash
-rm -f $DESTFOLDER/*
+
+MAX=""
+DESTFILENAME=""
+DATETIME=`date '+%Y-%m-%d_%H:%M:%S'`
+
 if [[ -e $DESTFOLDER/increment.list ]]; then
-    tar --create --file="$DESTFILENAMEINCREM" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+    MAX=`ls | cut -c-1 | sort -n | tail -1`
+
 else
-    tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER"
+    touch $DESTFOLDER/increment.list
+    MAX="0"
 fi;
+
+if [ $TODAY -ge $FRIDAY ]; then
+    MAX=$(( $MAX + 1 ))
+    DESTFILENAME="$MAX-savefull.tar"
+    tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER" 2>/dev/null
+else
+    DESTFILENAME="$MAX-$DATETIME-save.tar"
+    tar --create --file="$DESTFILENAME" --listed-incremental="$DESTFOLDER/increment.list" "$BACKUPFOLDER" 2>/dev/null
+fi;
+
+find $DESTFOLDER -mtime +30 -type f -delete
     " >> $CRONSCRIPT
     chmod +x $CRONSCRIPT
     (crontab -u $USER -l; echo "$CRONLINE";) | crontab -u $USER -
@@ -104,6 +133,9 @@ if [[ ($1 = "--help") || ($1 = "-h") ]]; then
     disable_auto_save
     exit 1
     elif [[ ($OPTION = "check") ]] ; then
+    check_cron
+    exit 1
+    elif [[ ($1 = "check") ]]; then
     check_cron
     exit 1
     elif [[ ($OPTION = "show") ]] ; then
