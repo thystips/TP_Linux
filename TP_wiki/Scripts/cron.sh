@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Cron expression
-cron="*/5 * * * * rsync -e 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' -av /var/www/html/data vagrant@192.168.33.11:/var/www/html"
+cron="*/5 * * * * rsync -e 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' -av /var/www/html/data/* vagrant@192.168.33.11:/var/www/html/data/"
     #  │ │ │ │ │
     #  │ │ │ │ │
     #  │ │ │ │ └───── day of week (0 - 6) (0 to 6 are Sunday to Saturday, or use names; 7 is Sunday, the same as 0)
