@@ -3,8 +3,12 @@
 
 # Log files (if you are creating logs in debug mode, uncomment this)
 # *.log
+<<<<<<< HEAD
 i/.vagrant
 
 # Vagrant
 http/.vagrant
 TP_wiki/.vagrant
+=======
+i/.vagrant
+>>>>>>> 6f533daec6a9bdf47ddf9e9ab1a9cd4345ce2550
