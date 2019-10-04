@@ -44,5 +44,5 @@ Fichier vagrantfile pour l'installation de Dokuwiki sur une box Debian10
 
 ### Vagrantfile-2
 
-Fichier vagrantfile pour l'utilisation de la d'une box avec Dokuwiki préinstallé créée par mes soins et disponible publiquement sur le vagrant cloud.
+Fichier vagrantfile pour l'utilisation de la d'une box avec Dokuwiki préinstallé créée par mes soins et disponible publiquement sur le [vagrant cloud](https://app.vagrantup.com/antoine33520/boxes/dokuwiki_debian10).
 "Si tu ne trouves pas l'outils adapté à tes besoins il faut le créer"
