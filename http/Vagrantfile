@@ -1,0 +1,18 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "centos/7"
+  config.vm.box_check_update = false
+  config.vm.provider "vmware_desktop" do |vb|
+    vb.memory = "2048"
+  end
+  config.vm.define "websrv" do |web|
+    web.vm.hostname = "websrv"
+    web.vm.network "private_network", ip: "192.168.56.98"
+    web.vm.provision "init", type: "shell", run: "once",
+      inline: <<-EOF
+        yum -y install httpd
+      EOF
+  end
+end
