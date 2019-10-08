@@ -1,0 +1,4 @@
+Options -Indexes
+Errordocument 404 index.html
+DirectoryIndex index.html
+Require all granted

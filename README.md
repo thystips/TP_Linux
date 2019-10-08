@@ -1,6 +1,6 @@
 # TP_Linux
 
-Dépôt de : *Antoine THYS*
+Dépôt de : _Antoine THYS_
 
 Ce dépôt contient les fichiers pour les rendus de TP du cours de Linux.
 
@@ -38,11 +38,20 @@ Pour utiliser ce script il est juste nécessaire de l'exécuter puis d'entrer le
 
 Contient les fichiers pour le rendu du TP Dokuwiki.
 
-### Vagrantfile
+### `Vagrantfile`
 
 Fichier vagrantfile pour l'installation de Dokuwiki sur une box Debian10
 
-### Vagrantfile-2
+### `Vagrantfile-2`
 
 Fichier vagrantfile pour l'utilisation de la d'une box avec Dokuwiki préinstallé créée par mes soins et disponible publiquement sur le [vagrant cloud](https://app.vagrantup.com/antoine33520/boxes/dokuwiki_debian10).
 "Si tu ne trouves pas l'outils adapté à tes besoins il faut le créer"
+
+## Dossier `TP_http`
+
+Contient les fichiers pour le rendu du TP http.
+
+### Fichier `Vagrantfile`
+
+Permet via vagrant le déploiement d'un reverse-proxy avec loadbalancing d'un Dokuwiki.\
+Rsync est configuré pour faire une copie du dossier data de Dokuwiki entre les 2 machines.

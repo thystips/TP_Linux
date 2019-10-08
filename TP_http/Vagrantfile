@@ -1,0 +1,55 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/debian10"
+  config.vm.box_check_update = false
+  config.hostmanager.enabled = true
+  config.hostmanager.manage_host = true
+  config.hostmanager.manage_guest = true
+  config.hostmanager.ignore_private_ip = false
+  config.hostmanager.include_offline = true
+
+  config.vm.define "master" do |master|
+    master.vm.hostname = "wiki"
+    master.vm.network "private_network", ip: "192.168.33.11"
+    master.vm.network "forwarded_port", guest: 80, host: 8181
+    master.vm.provision :shell, path: "Scripts/dokuwiki.sh"
+    master.vm.provision :shell, path: "Scripts/cron-master.sh", privileged: false
+    master.vm.provision "file", source: "files/index.html", destination: "/var/www/html/index.html"
+    master.vm.provision "file", source: "files/.htaccess", destination: "/var/www/html/.htaccess"
+    master.vm.provision "file", source: "files/000-default.conf", destination: "/etc/apache2/sites-available/000-default.conf"
+    master.vm.provision "file", source: "files/wiki.lab.local.conf", destination: "/etc/apache2/sites-available/wiki.lab.local.conf"
+    master.vm.provision "file", source: "files/rpaf.conf", destination: "/etc/apache2/sites-available/rpaf.conf"
+    master.vm.provision :shell, path: "Scripts/apache.sh"
+  end
+
+  config.vm.define "backup" do |backup|
+    backup.vm.hostname = "backup"
+    backup.vm.network "private_network", ip: "192.168.33.12"
+    backup.vm.network "forwarded_port", guest: 80, host: 8282
+    backup.vm.provision :shell, path: "Scripts/dokuwiki.sh"
+    backup.vm.provision :shell, path: "Scripts/cron-bakupc.sh", privileged: false
+    backup.vm.provision "file", source: "files/index.html", destination: "/var/www/html/index.html"
+    backup.vm.provision "file", source: "files/.htaccess", destination: "/var/www/html/.htaccess"
+    backup.vm.provision "file", source: "files/000-default.conf", destination: "/etc/apache2/sites-available/000-default.conf"
+    backup.vm.provision "file", source: "files/wiki.lab.local.conf", destination: "/etc/apache2/sites-available/wiki.lab.local.conf"
+    backup.vm.provision "file", source: "files/rpaf.conf", destination: "/etc/apache2/sites-available/rpaf.conf"
+    backup.vm.provision :shell, path: "Scripts/apache.sh"
+  end
+
+  config.vm.define "nginx" do |nginx|
+    nginx.vm.hostname = "nginx"
+    nginx.vm.network "private_network", ip: "192.168.33.10"
+    nginx.vm.network "forwarded_port", guest: 80, host: 8080
+    nginx.vm.provision :shell, path: "Scripts/nginx.sh"
+    nginx.vm.provision "file", source: "files/index.html", destination: "/var/www/html/index.html"
+    nginx.vm.provision :shell, path: "Scripts/nginx_rights.sh"
+  end
+
+  # SSH
+  config.vm.provision "file", source: "Keys/vagrant_rsa", destination: "/home/vagrant/.ssh/id_rsa"
+  config.vm.provision "file", source: "Keys/vagrant_rsa.pub", destination: "/home/vagrant/.ssh/authorized_keys"
+  config.vm.provision "file", source: "Keys/vagrant_rsa.pub", destination: "/home/vagrant/.ssh/id_rsa.pub"
+  config.vm.provision :shell, path: "Scripts/keys.sh", privileged: false
+end
