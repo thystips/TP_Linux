@@ -41,8 +41,6 @@ config.vm.provision "shell", inline: <<-SHELL
   SHELL
 
   # SSH
-  config.ssh.insert_key = false
-  config.ssh.private_key_path = ["Keys/vagrant_rsa", "~/.vagrant.d/insecure_private_key"]
   config.vm.provision "file", source: "Keys/vagrant_rsa", destination: "/home/vagrant/.ssh/id_rsa"
   config.vm.provision "file", source: "Keys/vagrant_rsa.pub", destination: "/home/vagrant/.ssh/authorized_keys"
   config.vm.provision "file", source: "Keys/vagrant_rsa.pub", destination: "/home/vagrant/.ssh/id_rsa.pub"
