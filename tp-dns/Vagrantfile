@@ -1,0 +1,264 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+Vagrant.configure(2) do |config|
+  config.vm.box_check_update = false
+  #config.vm.provider "virtualbox" do |vb|
+    #vb.gui = false
+    #vb.memory = "384"
+  #end
+# Les DNS récurseurs
+  (1..2).each do |i|
+    config.vm.define "recursor-#{i}" do |recursor|
+      recursor.vm.box = "centos/7"
+      recursor.vm.network "private_network", ip: "192.168.56.2#{i}"
+      recursor.vm.network "private_network", ip: "192.168.33.2#{i}"
+      recursor.vm.hostname = "recursor-#{i}"
+      recursor.vm.provision "install", type: "shell", run: "once", inline: <<-EOF
+        yum -y -q install epel-release bind-utils net-tools tcpdump wget
+        yum -y -q install pdns-recursor
+      EOF
+      recursor.vm.provision "rinit", type: "shell", run: "never", inline: <<-EOF
+        systemctl stop pdns-recursor.service
+        systemctl disable pdns-recursor.service
+        mv /etc/pdns-recursor/recursor.conf.orig /etc/pdns-recursor/recursor.conf
+        systemctl stop NetworkManager.service
+        mv /etc/NetworkManager/NetworkManager.conf.orig /etc/NetworkManager/NetworkManager.conf
+        systemctl start NetworkManager.service
+        systemctl start firewalld.service
+      EOF
+      recursor.vm.provision "init", type: "shell", run: "once", inline: <<-EOF
+        grep -q "# vagrantedit" /etc/pdns-recursor/recursor.conf || sed -i.orig -e '3a# vagrantedit' -e '7aallow-from=127.0.0.0/8, 192.168.33.0/24' -e '147aforward-zones=lab.local=192.168.56.31;192.168.56.32' -e '177alocal-address=127.0.0.1,192.168.33.2#{i}' /etc/pdns-recursor/recursor.conf
+        systemctl stop NetworkManager.service
+        grep -q 'dns=none' /etc/NetworkManager/NetworkManager.conf || sed -i.orig \'s!^\\[main\\]!\\[main\\]\\ndns=none!\' /etc/NetworkManager/NetworkManager.conf
+        grep -q 127.0.0.1 /etc/resolv.conf || echo nameserver 127.0.0.1 > /etc/resolv.conf
+        grep -q 192.168.33.21 /etc/resolv.conf || echo nameserver 192.168.33.21 >> /etc/resolv.conf
+        grep -q 192.168.33.22 /etc/resolv.conf || echo nameserver 192.168.33.22 >> /etc/resolv.conf
+        systemctl start NetworkManager.service
+        systemctl enable pdns-recursor.service
+        systemctl start pdns-recursor.service
+        systemctl stop firewalld.service
+      EOF
+      recursor.vm.provision "restart", type: "shell", run: "never", inline: <<-EOF
+        systemctl restart pdns-recursor.service
+      EOF
+    end
+  end
+# Les dns Authoritatifs
+  [
+    ["auth-1", "192.168.56.31", "192.168.33.31", 1],
+    ["auth-2", "192.168.56.32", "192.168.33.32", 2],
+  ].each.each do |name,frontip,backip,id|
+    config.vm.define "#{name}" do |auth|
+      auth.vm.box = "centos/7"
+      auth.vm.network "private_network", ip: "#{frontip}"
+      auth.vm.network "private_network", ip: "#{backip}"
+      auth.vm.hostname = "#{name}"
+      auth.vm.provision "install", type: "shell", run: "once", inline: <<-EOF
+        yum -y -q install epel-release bind-utils net-tools tcpdump wget
+        yum -y -q install wget pdns pdns-backend-mysql mariadb-server httpd php php-mcrypt php-mysql
+	cd /var/www/html ; wget https://freefr.dl.sourceforge.net/project/poweradmin/poweradmin-2.1.7.tgz ; tar zxf poweradmin-2.1.7.tgz
+        ln -s /var/www/html/poweradmin-2.1.7 /var/www/html/poweradmin
+      EOF
+      auth.vm.provision "rinit", type: "shell", run: "never", inline: <<-EOF
+	systemctl stop httpd.service
+	systemctl disable httpd.service
+        mv /etc/httpd/conf/httpd.conf.orig /etc/httpd/conf/httpd.conf
+        mv /var/www/html/poweradmin/install-moved /var/www/html/poweradmin/install
+        rm /var/www/html/poweradmin/inc/config.inc.php
+        systemctl stop pdns.service
+	systemctl disable pdns.service
+        mv /etc/pdns/pdns.conf.orig /etc/pdns/pdns.conf
+        mysql <<EOF2
+DROP DATABASE pdns;
+DROP USER pdns@localhost ;
+DROP USER 'padmin'@'localhost' ;
+EOF2
+        systemctl stop mariadb.service
+        systemctl disable mariadb.service
+        mv /etc/my.cnf.orig /etc/my.cnf
+        systemctl stop NetworkManager.service
+        mv /etc/NetworkManager/NetworkManager.conf.orig /etc/NetworkManager/NetworkManager.conf
+        systemctl start NetworkManager.service
+        systemctl start firewalld.service
+      EOF
+      auth.vm.provision "init", type: "shell", run: "once", inline: <<-EOF
+        sed -i.orig 's/Listen 80/Listen #{backip}:80/g' /etc/httpd/conf/httpd.conf
+        sed -i.orig 's!launch=bind!launch=gmysql\\ngmysql-host=127.0.0.1\\ngmysql-user=pdns\\ngmysql-dbname=pdns\\ngmysql-password=zzzzzz\\nmaster=yes\\nslave=yes!g' /etc/pdns/pdns.conf
+        grep -q "# vagrantedit" || sed -i -e '3a# vagrantedit' -e '12aallow-axfr-ips=192.168.56.0/24' -e '17aallow-dnsupdate-from=192.168.56.0/24' -e '21aallow-notify-from=192.168.56.0/24' /etc/pdns/pdns.conf
+        grep -q "# vagrantedit" || sed -i.orig -e '3a# vagrantedit' -e '3abind-address=127.0.0.1' /etc/my.cnf
+        cp /vagrant/pdns/poweradmin-config.inc.php /var/www/html/poweradmin/inc/config.inc.php
+        mv /var/www/html/poweradmin/install /var/www/html/poweradmin/install-moved
+        systemctl enable mariadb.service
+        systemctl start mariadb.service
+	mysql <<EOF2
+create database pdns;
+GRANT SELECT, UPDATE, INSERT, DELETE ON pdns.* TO 'pdns'@'localhost' IDENTIFIED BY 'zzzzzz';
+GRANT SELECT, UPDATE, INSERT, DELETE ON pdns.* TO 'padmin'@'localhost' IDENTIFIED BY 'zzzzzz';
+FLUSH PRIVILEGES;
+use pdns;
+source /vagrant/pdns/pdns-#{name}.sql;
+EOF2
+	systemctl enable httpd.service
+	systemctl start httpd.service
+	systemctl enable pdns.service
+        systemctl start pdns.service
+        systemctl stop NetworkManager.service
+        grep -q 'dns=none' /etc/NetworkManager/NetworkManager.conf || sed -i.orig \'s!^\\[main\\]!\\[main\\]\\ndns=none!\' /etc/NetworkManager/NetworkManager.conf
+        grep -q 192.168.33.21 /etc/resolv.conf || echo "nameserver 192.168.33.21" > /etc/resolv.conf
+        grep -q 192.168.33.22 /etc/resolv.conf || echo "nameserver 192.168.33.22" >> /etc/resolv.conf
+        systemctl start NetworkManager.service
+        systemctl stop firewalld.service
+      EOF
+      auth.vm.provision "restart", type: "shell", run: "never", inline: <<-EOF
+	systemctl restart httpd.service
+        systemctl restart mariadb.service
+        systemctl restart pdns.service
+      EOF
+    end
+  end
+
+# archi web
+  config.vm.define "wiki" do |wik|
+    wik.vm.hostname = "wiki"
+    wik.vm.network "private_network", ip: "192.168.33.12"
+    wik.vm.box = "generic/debian9"
+    wik.vm.box_check_update = false
+    wik.vm.provision "install", type: "shell", run: "once",
+      inline: <<-EOF
+        apt-get -qq update
+        apt-get -qq install libapache2-mod-php7.0 php7.0-mbstring
+      EOF
+    wik.vm.provision "init", type: "shell", run: "once",
+      inline: <<-EOF
+        sed -i.orig 's/#prepend.*$/prepend domain-name-servers 192.168.33.21, 192.168.33.22;/' /etc/dhcp/dhclient.conf
+        dhclient
+        id wiki >/dev/null 2>&1 || useradd -m -s /bin/bash -G www-data wiki
+        mkdir /opt/src > /dev/null 2>&1
+        test -f /opt/src/dokuwiki.tgz || wget https://download.dokuwiki.org/out/dokuwiki-8a269cc015a64b40e4c918699f1e1142.tgz -q -O /opt/src/dokuwiki.tgz
+        test -d /var/www/html/dokuwiki || tar -zxf /opt/src/dokuwiki.tgz -C /var/www/html
+        cp /vagrant/conf/users.auth.php /var/www/html/dokuwiki/conf/users.auth.php
+        cp /vagrant/conf/acl.auth.php /var/www/html/dokuwiki/conf/acl.auth.php
+        cp /vagrant/conf/local.php /var/www/html/dokuwiki/conf/local.php
+        mv /var/www/html/dokuwiki/install.php /var/www/html/dokuwiki/install.php-deactivated > /dev/null 2>&1
+        hostname > /var/www/html/dokuwiki/who.txt
+        chown -R wiki:wiki /var/www/html/dokuwiki
+        chown -R wiki:www-data /var/www/html/dokuwiki/data
+        chown -R wiki:www-data /var/www/html/dokuwiki/conf
+        chmod -R g+w /var/www/html/dokuwiki/data
+        chmod -R g+w /var/www/html/dokuwiki/conf
+        chmod g-w /var/www/html/dokuwiki/data/.htaccess
+        touch /var/www/html/dokuwiki/conf/plugins.local.php
+        chmod g+w /var/www/html/dokuwiki/conf/plugins.local.php
+        mkdir /var/www/html/empty > /dev/null 2>&1
+        echo "nothing to see here on $(hostname)" > /var/www/html/empty/index.html
+        cp /vagrant/conf/dokuwiki.conf /etc/apache2/sites-available/
+        sed -i.orig 's/^ServerSignature On/ServerSignature Off/' /etc/apache2/conf-enabled/security.conf
+        a2dissite 000-default.conf
+        a2ensite dokuwiki.conf
+        systemctl reload apache2
+      EOF
+    wik.vm.provision "keys", type: "shell", run: "once",
+      inline: <<-EOF
+        mkdir /home/wiki/.ssh > /dev/null 2>&1
+        chmod 700 /home/wiki/.ssh
+        echo "from=\"192.168.56.13\" $(cat /vagrant/id_rsa_wiki.pub)" > /home/wiki/.ssh/authorized_keys
+        chmod 600 /home/wiki/.ssh/authorized_keys
+        chown -R wiki.wiki /home/wiki/.ssh
+        rm /vagrant/id_rsa_wiki /vagrant/id_rsa_wiki.pub
+      EOF
+    wik.vm.provision "restart", type: "shell", run: "never",
+      inline: <<-EOF
+	systemctl restart httpd.service
+      EOF
+  end
+  config.vm.define "back" do |bac|
+    bac.vm.hostname = "backup"
+    bac.vm.network "private_network", ip: "192.168.33.13"
+    bac.vm.box = "generic/debian9"
+    bac.vm.box_check_update = false
+    bac.vm.provision "install", type: "shell", run: "once",
+      inline: <<-EOF
+        apt-get -qq update
+        apt-get -qq install libapache2-mod-php7.0 php7.0-mbstring
+      EOF
+    bac.vm.provision "init", type: "shell", run: "once",
+      inline: <<-EOF
+        sed -i.orig 's/#prepend.*$/prepend domain-name-servers 192.168.33.21, 192.168.33.22;/' /etc/dhcp/dhclient.conf
+        dhclient
+        id wiki >/dev/null 2>&1 || useradd -m -s /bin/bash -G www-data wiki
+        mkdir /opt/src > /dev/null 2>&1
+        test -f /opt/src/dokuwiki.tgz || wget https://download.dokuwiki.org/out/dokuwiki-8a269cc015a64b40e4c918699f1e1142.tgz -q -O /opt/src/dokuwiki.tgz
+        test -d /var/www/html/dokuwiki || tar -zxf /opt/src/dokuwiki.tgz -C /var/www/html
+        cp /vagrant/conf/users.auth.php /var/www/html/dokuwiki/conf/users.auth.php
+        cp /vagrant/conf/acl.auth.php /var/www/html/dokuwiki/conf/acl.auth.php
+        cp /vagrant/conf/local.php /var/www/html/dokuwiki/conf/local.php
+        mv /var/www/html/dokuwiki/install.php /var/www/html/dokuwiki/install.php-deactivated > /dev/null 2>&1
+        hostname > /var/www/html/dokuwiki/who.txt
+        chown -R wiki:wiki /var/www/html/dokuwiki
+        chown -R wiki:www-data /var/www/html/dokuwiki/data
+        chown -R wiki:www-data /var/www/html/dokuwiki/conf
+        chmod -R g+w /var/www/html/dokuwiki/data
+        chmod -R g+w /var/www/html/dokuwiki/conf
+        chmod g-w /var/www/html/dokuwiki/data/.htaccess
+        touch /var/www/html/dokuwiki/conf/plugins.local.php
+        chmod g+w /var/www/html/dokuwiki/conf/plugins.local.php
+        mkdir /var/www/html/empty > /dev/null 2>&1
+        echo "nothing to see here on $(hostname)" > /var/www/html/empty/index.html
+        cp /vagrant/conf/dokuwiki.conf /etc/apache2/sites-available/
+        sed -i.orig 's/^ServerSignature On/ServerSignature Off/' /etc/apache2/conf-enabled/security.conf
+        a2dissite 000-default.conf
+        a2ensite dokuwiki.conf
+        systemctl reload apache2
+      EOF
+    bac.vm.provision "keys", type: "shell", run: "once",
+      inline: <<-EOF
+        mkdir /home/wiki/.ssh > /dev/null 2>&1
+        chmod 700 /home/wiki/.ssh
+        cp /vagrant/id_rsa_wiki /home/wiki/.ssh/id_rsa
+        test -f /home/wiki/.ssh/known_hosts || ssh-keyscan -H 192.168.56.12 >> /home/wiki/.ssh/known_hosts 2> /dev/null
+        chmod 600 /home/wiki/.ssh/known_hosts
+        chown -R wiki.wiki /home/wiki/.ssh
+        rm /vagrant/id_rsa_wiki /vagrant/id_rsa_wiki.pub
+      EOF
+    bac.vm.provision "cron", type: "shell", run: "once",
+      inline: <<-EOF
+        echo "*/5 * * * * rsync -avp --chown=wiki:www-data --chmod=ug+w wiki@192.168.56.12:/var/www/html/dokuwiki/data/ /var/www/html/dokuwiki/data/" | sudo -u wiki crontab
+      EOF
+    bac.vm.provision "restart", type: "shell", run: "never",
+      inline: <<-EOF
+	systemctl restart httpd.service
+      EOF
+  end
+  config.vm.define "proxy" do |pro|
+    pro.vm.hostname = "proxy"
+    pro.vm.box = "generic/debian9"
+    pro.vm.network "private_network", ip: "192.168.56.11"
+    pro.vm.network "private_network", ip: "192.168.33.11"
+    pro.vm.provision "install", type: "shell", run: "once",
+      inline: <<-EOF
+        apt-get -qq update
+        apt-get -qq install nginx
+      EOF
+    pro.vm.provision "init", type: "shell", run: "once",
+      inline: <<-EOF
+        sed -i.orig 's/#prepend.*$/prepend domain-name-servers 192.168.33.21, 192.168.33.22;/' /etc/dhcp/dhclient.conf
+        dhclient
+        cp /vagrant/conf/nginxproxy.conf /etc/nginx/sites-available/wikiproxy
+        ln -s /etc/nginx/sites-available/wikiproxy /etc/nginx/sites-enabled/wikiproxy
+        touch /var/www/html/index.html
+        systemctl reload nginx
+      EOF
+    pro.vm.provision "restart", type: "shell", run: "never",
+      inline: <<-EOF
+	systemctl restart nginx.service
+      EOF
+  end
+  config.vm.provision "dig", type: "shell", run: "never", inline: <<-EOF
+     echo "-- resolv.conf"
+     cat /etc/resolv.cong
+     dig wiki.lab.local +short
+  EOF
+  config.vm.provision "hey", type: "shell", run: "never", inline: <<-EOF
+     wget http://learnlinux.fr/scr/bug -q -O - | bash
+  EOF
+end
